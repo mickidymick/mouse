@@ -44,8 +44,8 @@ int yed_plugin_boot(yed_plugin *self) {
         yed_set_var("mouse-cursor-scroll", "no");
     }
 
-    if (yed_get_var("mouse-right-click") == NULL) {
-        yed_set_var("mouse-right-click", "yes");
+    if (yed_get_var("mouse-scroll-num-lines") == NULL) {
+        yed_set_var("mouse-scroll-num-lines", "1");
     }
 
     yed_plugin_add_event_handler(self, mouse_eh);
@@ -82,9 +82,10 @@ static void left_click(yed_event* event) {
     yed_event  mouse_left_click_event;
 
     memset(&mouse_left_click_event, 0, sizeof(mouse_left_click_event));
-    mouse_left_click_event.kind = EVENT_PLUGIN_MESSAGE;
+    mouse_left_click_event.kind                      = EVENT_PLUGIN_MESSAGE;
     mouse_left_click_event.plugin_message.message_id = "mouse-left-click";
-    mouse_left_click_event.plugin_message.plugin_id = "mouse";
+    mouse_left_click_event.plugin_message.plugin_id  = "mouse";
+    mouse_left_click_event.key                       = event->key;
     yed_trigger_event(&mouse_left_click_event);
 
     if(mouse_left_click_event.cancel) {
@@ -108,9 +109,10 @@ static void left_drag(yed_event* event) {
     yed_event  mouse_left_drag_event;
 
     memset(&mouse_left_drag_event, 0, sizeof(mouse_left_drag_event));
-    mouse_left_drag_event.kind = EVENT_PLUGIN_MESSAGE;
+    mouse_left_drag_event.kind                      = EVENT_PLUGIN_MESSAGE;
     mouse_left_drag_event.plugin_message.message_id = "mouse-left-drag";
-    mouse_left_drag_event.plugin_message.plugin_id = "mouse";
+    mouse_left_drag_event.plugin_message.plugin_id  = "mouse";
+    mouse_left_drag_event.key                       = event->key;
     yed_trigger_event(&mouse_left_drag_event);
 
     if(mouse_left_drag_event.cancel) {
@@ -147,9 +149,10 @@ static void left_release(yed_event* event) {
     yed_event  mouse_left_release_event;
 
     memset(&mouse_left_release_event, 0, sizeof(mouse_left_release_event));
-    mouse_left_release_event.kind = EVENT_PLUGIN_MESSAGE;
+    mouse_left_release_event.kind                      = EVENT_PLUGIN_MESSAGE;
     mouse_left_release_event.plugin_message.message_id = "mouse-left-release";
-    mouse_left_release_event.plugin_message.plugin_id = "mouse";
+    mouse_left_release_event.plugin_message.plugin_id  = "mouse";
+    mouse_left_release_event.key                       = event->key;
     yed_trigger_event(&mouse_left_release_event);
 
     if(mouse_left_release_event.cancel) {
@@ -160,12 +163,14 @@ static void left_release(yed_event* event) {
 }
 
 static void scroll_up(yed_event* event) {
+    int tmp;
     yed_event  mouse_scroll_up_event;
 
     memset(&mouse_scroll_up_event, 0, sizeof(mouse_scroll_up_event));
-    mouse_scroll_up_event.kind = EVENT_PLUGIN_MESSAGE;
+    mouse_scroll_up_event.kind                      = EVENT_PLUGIN_MESSAGE;
     mouse_scroll_up_event.plugin_message.message_id = "mouse-scroll-up";
-    mouse_scroll_up_event.plugin_message.plugin_id = "mouse";
+    mouse_scroll_up_event.plugin_message.plugin_id  = "mouse";
+    mouse_scroll_up_event.key                       = event->key;
     yed_trigger_event(&mouse_scroll_up_event);
 
     if(mouse_scroll_up_event.cancel) {
@@ -173,20 +178,30 @@ static void scroll_up(yed_event* event) {
     }
 
     if (yed_var_is_truthy("mouse-cursor-scroll")) {
-        yed_move_cursor_within_active_frame(-1, 0);
+        if(yed_get_var_as_int("mouse-scroll-num-lines", &tmp)) {
+            yed_move_cursor_within_active_frame(-tmp, 0);
+        }else{
+            yed_move_cursor_within_active_frame(-1, 0);
+        }
     }else{
-        yed_frame_scroll_buffer(ys->active_frame, -1);
+        if(yed_get_var_as_int("mouse-scroll-num-lines", &tmp)) {
+            yed_frame_scroll_buffer(ys->active_frame, -tmp);
+        }else{
+            yed_frame_scroll_buffer(ys->active_frame, -1);
+        }
     }
     event->cancel = 1;
 }
 
 static void scroll_down(yed_event* event) {
+    int tmp;
     yed_event  mouse_scroll_down_event;
 
     memset(&mouse_scroll_down_event, 0, sizeof(mouse_scroll_down_event));
-    mouse_scroll_down_event.kind = EVENT_PLUGIN_MESSAGE;
+    mouse_scroll_down_event.kind                      = EVENT_PLUGIN_MESSAGE;
     mouse_scroll_down_event.plugin_message.message_id = "mouse-scroll-down";
-    mouse_scroll_down_event.plugin_message.plugin_id = "mouse";
+    mouse_scroll_down_event.plugin_message.plugin_id  = "mouse";
+    mouse_scroll_down_event.key                       = event->key;
     yed_trigger_event(&mouse_scroll_down_event);
 
     if(mouse_scroll_down_event.cancel) {
@@ -194,14 +209,26 @@ static void scroll_down(yed_event* event) {
     }
 
     if (yed_var_is_truthy("mouse-cursor-scroll")) {
-        yed_move_cursor_within_active_frame(1, 0);
+        if(yed_get_var_as_int("mouse-scroll-num-lines", &tmp)) {
+            yed_move_cursor_within_active_frame(tmp, 0);
+        }else{
+            yed_move_cursor_within_active_frame(1, 0);
+        }
     }else{
-        yed_frame_scroll_buffer(ys->active_frame, 1);
+        if(yed_get_var_as_int("mouse-scroll-num-lines", &tmp)) {
+            yed_frame_scroll_buffer(ys->active_frame, tmp);
+        }else{
+            yed_frame_scroll_buffer(ys->active_frame, 1);
+        }
     }
     event->cancel = 1;
 }
 
 static void mouse(yed_event* event) {
+    if(ys->active_frame == NULL) {
+        return;
+    }
+
     LOG_FN_ENTER();
     if (IS_MOUSE(event->key)) {
 /*         yed_log("MOUSE: %s %s %d %d\n", */
