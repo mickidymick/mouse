@@ -14,8 +14,9 @@ static char *mouse_actions[] = {
     "DRAG",
 };
 
-static int if_dragging;
+static int        if_dragging;
 static yed_frame *drag_frame;
+static u64        last_timestamp;
 
 static void mouse(yed_event* event);
 static void mouse_unload(yed_plugin *self);
@@ -23,6 +24,7 @@ static void mouse_unload(yed_plugin *self);
 static yed_frame *find_frame(yed_event* event);
 static int yed_cell_is_in_frame_mouse(int row, int col, yed_frame *frame);
 static void left_click(yed_event* event);
+static void double_left_click(yed_event* event);
 static void left_drag(yed_event* event);
 static void left_release(yed_event* event);
 static void scroll_up(yed_event* event);
@@ -36,6 +38,7 @@ int yed_plugin_boot(yed_plugin *self) {
     YED_PLUG_VERSION_CHECK();
 
     if_dragging = 0;
+    last_timestamp = measure_time_now_ms();
 
     mouse_eh.kind = EVENT_KEY_PRESSED;
     mouse_eh.fn   = mouse;
@@ -102,6 +105,35 @@ static void left_click(yed_event* event) {
                                         MOUSE_COL(event->key) - frame->left + frame->buffer_x_offset - frame->gutter_width + 1);
     YEXE("select-off");
     event->cancel = 1;
+}
+
+static void double_left_click(yed_event* event) {
+    yed_frame *frame;
+    yed_event  mouse_double_left_click_event;
+    int        key;
+    memset(&mouse_double_left_click_event, 0, sizeof(mouse_double_left_click_event));
+    mouse_double_left_click_event.kind                      = EVENT_PLUGIN_MESSAGE;
+    mouse_double_left_click_event.plugin_message.message_id = "mouse-left-click";
+    mouse_double_left_click_event.plugin_message.plugin_id  = "mouse";
+    mouse_double_left_click_event.key                       = event->key;
+    yed_trigger_event(&mouse_double_left_click_event);
+
+    if(mouse_double_left_click_event.cancel) {
+        return;
+    }
+    frame = find_frame(event);
+    if (frame == NULL) {
+        if_dragging = 0;
+        YEXE("select-off");
+        return;
+    }
+    yed_activate_frame(frame);
+    yed_set_cursor_within_frame(frame, MOUSE_ROW(event->key) - frame->top + frame->buffer_y_offset + 1,
+                                        MOUSE_COL(event->key) - frame->left + frame->buffer_x_offset - frame->gutter_width + 1);
+    YEXE("select-off");
+    event->cancel = 1;
+    key = ENTER;
+    yed_feed_keys(1, &key);
 }
 
 static void left_drag(yed_event* event) {
@@ -173,6 +205,9 @@ static void scroll_up(yed_event* event) {
     mouse_scroll_up_event.key                       = event->key;
     yed_trigger_event(&mouse_scroll_up_event);
 
+    LOG_FN_ENTER();
+    yed_log("shit");
+
     if(mouse_scroll_up_event.cancel) {
         return;
     }
@@ -180,6 +215,7 @@ static void scroll_up(yed_event* event) {
     if (yed_var_is_truthy("mouse-cursor-scroll")) {
         if(yed_get_var_as_int("mouse-scroll-num-lines", &tmp)) {
             yed_move_cursor_within_active_frame(-tmp, 0);
+            yed_log("woo:%d", -tmp);
         }else{
             yed_move_cursor_within_active_frame(-1, 0);
         }
@@ -190,6 +226,7 @@ static void scroll_up(yed_event* event) {
             yed_frame_scroll_buffer(ys->active_frame, -1);
         }
     }
+    LOG_EXIT();
     event->cancel = 1;
 }
 
@@ -225,23 +262,30 @@ static void scroll_down(yed_event* event) {
 }
 
 static void mouse(yed_event* event) {
+    u64 cur_timestamp;
+
     if(ys->active_frame == NULL) {
         return;
     }
 
     LOG_FN_ENTER();
     if (IS_MOUSE(event->key)) {
-/*         yed_log("MOUSE: %s %s %d %d\n", */
-/*                 mouse_buttons[MOUSE_BUTTON(event->key)], */
-/*                 mouse_actions[MOUSE_KIND(event->key)], */
-/*                 MOUSE_ROW(event->key), */
-/*                 MOUSE_COL(event->key)); */
+        yed_log("MOUSE: %s %s %d %d\n",
+                mouse_buttons[MOUSE_BUTTON(event->key)],
+                mouse_actions[MOUSE_KIND(event->key)],
+                MOUSE_ROW(event->key),
+                MOUSE_COL(event->key));
 
         switch (MOUSE_BUTTON(event->key)) {
             case MOUSE_BUTTON_LEFT:
                 if (MOUSE_KIND(event->key) == MOUSE_PRESS) {
-                    left_click(event);
-
+                    cur_timestamp = measure_time_now_ms();
+                    if((cur_timestamp - last_timestamp) <= 300) {
+                        double_left_click(event);
+                    }else{
+                        left_click(event);
+                    }
+                    last_timestamp = cur_timestamp;
                 }else if (MOUSE_KIND(event->key) == MOUSE_DRAG) {
                     left_drag(event);
 
