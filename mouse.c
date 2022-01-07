@@ -1,5 +1,5 @@
 #include <yed/plugin.h>
-is
+
 static int        if_dragging;
 static yed_frame *drag_frame;
 static u64        last_timestamp;
